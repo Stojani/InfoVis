@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+</head>
+<body>
+
+    <svg id="flies" viewBox="0 0 1000 1000">
+        <defs>
+            <!-- Group of gradients -->
+            <g>
+                <linearGradient id="g1" x1="0%" y1="0%" x2="90%" y2="90%">
+                <stop stop-color="grey" offset="0%"/>
+                <stop stop-color="black" offset="100%"/>
+                </linearGradient>
+                <linearGradient id="g2" x1="0%" y1="0%" x2="90%" y2="90%">
+                <stop stop-color="grey" offset="0%"/>
+                <stop stop-color="rgb(100,100,100)" offset="100%"/>
+                </linearGradient>
+            </g>
+
+            <!-- Symbol Creation -->
+            <symbol id="fly">        
+                <!--body-->
+                <!--<ellipse cx="80" cy="70" rx="20" ry="45" style="fill:rgb(56, 56, 55);stroke:black;stroke-width:1" />-->
+                <ellipse cx="80" cy="70" rx="20" ry="45" fill="url(#g1)" style="stroke:black;stroke-width:1" />
+                <!--eyes-->
+                <ellipse cx="70" cy="30" rx="8" ry="6" style="fill:rgb(190, 13, 13);stroke:black;stroke-width:1" />
+                <ellipse cx="90" cy="30" rx="8" ry="6" style="fill:rgb(190, 13, 13);stroke:black;stroke-width:1" />
+                <!--legs--> 
+                <polyline points="40,10 50,25 50,35 64,45" style="fill:none;stroke:black;stroke-width:3" />
+                <polyline points="120,10 110,25 110,35 96,45" style="fill:none;stroke:black;stroke-width:3" />
+                <polyline points="20,55 35,60 45,55 61,60" style="fill:none;stroke:black;stroke-width:3" />
+                <polyline points="140,55 125,60 115,55 99,60" style="fill:none;stroke:black;stroke-width:3" />
+                <polyline points="55,110 55,125 40,140 " style="fill:none;stroke:black;stroke-width:3" />
+                <polyline points="105,110 105,125 120,140 " style="fill:none;stroke:black;stroke-width:3" />
+                <!--wings-->
+                <path id="wing" fill="url(#g2)" d="M 30 90 A 2 3, 45, 0 0, 70 100 Q 70 100, 80 50" />
+                <path id="wing2" fill="url(#g2)" d="M 130 90 A 2 3, 135, 0 1, 90 100 Q 90 100, 80 50"/>
+            </symbol>
+        </defs>
+
+    </svg>
+    <script>
+
+        var keyPressed = false;
+        window.addEventListener("keydown", checkKeyPress);
+        function checkKeyPress(key) {
+            if (key.key == "y") {
+                keyPressed = true;
+                } else {
+                    keyPressed = false;
+                }                   
+        }
+
+        window.addEventListener("keyup", keyUpped);
+        function keyUpped(key) {
+            keyPressed = false;                    
+        }
+
+        d3.json("data/fliesConf.json").then(function(data) {
+            var clickCount = 0;     
+            let dataset0 = data[0].conf;
+            let dataset1 = data[1].conf;
+            let dataset2 = data[2].conf;
+            let dataset3 = data[3].conf;
+            let dataset4 = data[4].conf;
+
+            var svgContainer = d3.select("body")
+            .select("#flies")
+            // .attr("width", "100%")
+            // .attr("height", "100%");
+
+            function updateClickCount() {
+                if (clickCount == 4) {
+                    clickCount = 0;
+                } else {
+                    clickCount++;
+                }
+            }
+
+            var fliesGroup = svgContainer.selectAll("use")
+            .data(eval("dataset"+clickCount))
+            .enter()
+            .append("use")
+            .attr("xlink:href","#fly")
+            .attr('transform', 'scale(0.3)')
+            .attr("x", function(d) {
+                return d[0];
+            })
+            .attr("y", function(d) {
+                return d[1];
+            })
+            .on("click", function() {
+                if (keyPressed == true) {
+   
+                    updateClickCount();
+                    var updateFlies = svgContainer.selectAll("use")
+                    .data(eval("dataset"+clickCount));
+
+                    updateFlies.exit().remove();
+                    updateFlies.enter()
+                    .append("use")
+                    .attr("xlink:href","#fly")
+                    .attr('transform', 'scale(0.3)')
+                    updateFlies.transition()
+                    .duration(300)
+                    .attr("x", function(d) {
+                        return d[0];
+                    })
+                    .attr("y", function(d) {
+                        return d[1];
+                    });
+                } else {
+                    alert("Hold 'y' and click on a fly to change flies position");
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>

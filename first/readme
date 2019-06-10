@@ -1,0 +1,4 @@
+Go inside the directory where is flies.html file and open the terminal here,
+type python -m SimpleHTTPServer ,
+open your browser ang go to http://localhost:8000/flies.html or http://localhost:3000/flies.html
+
