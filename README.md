@@ -1,2 +1,2 @@
 # InfoVis
-repository for projects of Information Visualizzation course
+repository for projects of Information Visualization course
