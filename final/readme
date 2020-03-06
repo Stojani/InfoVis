@@ -1,0 +1,7 @@
+Go inside the directory where are meals.html and ingredients.html files and open the terminal here,
+type python -m SimpleHTTPServer ,
+
+First Graph: open your browser ang go to http://localhost:8000/meals.html or http://localhost:3000/meals.html
+
+Second Graph: open your browser ang go to http://localhost:8000/ingredients.html or http://localhost:3000/ingredients.html
+

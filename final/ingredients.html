@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js" 
+      integrity="sha384-xBuQ/xzmlsLoJpyjoggmTEz8OWUFM0/RC5BsqQBDX2v5cMvDHcMakNTNrHIW2I5f" 
+      crossorigin="anonymous">
+    </script>
+    <!--<link rel="stylesheet" href="css/accordion.css"> -->
+    <!--<script src="js/accordion.min.js"></script> -->
+</head>
+<body>
+  <style>
+  .node {
+    stroke: white;
+    stroke-width: 0.5px;
+  }
+
+  .link {
+    stroke: #d3d3d3;
+  }
+
+  .ntext {
+    font-size: 10px;
+  }
+  
+  </style>
+    <h2>Ingredients Compatibility</h2>
+
+    <div id ="ingr_filter_area"></div>
+
+    <!-- Create a div where the graph will take place -->
+    <div id="ingr_graph" style="background-image: url('img/piatto.jpeg');"></div>
+
+    <script>
+
+      const margin = {top: 20, right: 10, bottom: 20, left: 10}
+
+      const width = window.innerWidth
+      const height = window.innerHeight
+
+      const filterArea = d3.select('#ingr_filter_area')
+      .attr('width', width)
+      .style('height', '50px')
+      .style('background-color', '#b3ccff')
+      .append('text')
+      .text('INGREDIENT FILTERS:')
+      .style('font-size', "20px")
+      .style('font-weight', 800)
+      .style('margin-left', "20px")
+      .style('margin-right', '30px')
+      .style('line-height', '50px')
+
+      var groups = new Set();
+      var ingrSet = new Set();
+      var groupsList = [];
+      var ingrList = [];
+
+      groups.add('All')
+      ingrSet.add('All')
+
+      var selectedGroup ='All';
+      var selectedIngr = 'All';
+      var isSelected = '';
+      var groupsColor = ['#fff505','#90ecab','#baa34d','#f37f2d','#bae9ff','#ffdbdb','#ff1212',
+      '#f7f3ce','#216583','#d0d0d0','#000000','#5b0aa8','#065535','#cd1076'];
+
+      var groupSelectorText = d3.select('#ingr_filter_area')
+      .append('text')
+      .text('Filter by Group: ')
+      .style('font-size', "20px")
+      
+      var groupSelector = d3.select('#ingr_filter_area')
+      .insert("select", "svg")
+      .attr('id', 'groupselector')
+      .style('width', '120px')
+
+      var filterButton = d3.select('#ingr_filter_area')
+      .append("input")
+      .attr("type", "button")
+      .attr("name", "filter")
+      .attr("value", "Filter Group")
+      .style('margin-left', '30px')
+      .style("background-color", "#00e600")
+
+      var ingrSelectorText = d3.select('#ingr_filter_area')
+      .append('text')
+      .text('Filter by Single Ingr.: ')
+      .style('margin-left', '30px')
+      .style('font-size', "20px")
+
+      var ingrSelector = d3.select('#ingr_filter_area')
+      .insert("select", "svg")
+      .attr('id', 'ingrselector')
+      .style('width', '120px')
+
+      var ingrButton = d3.select('#ingr_filter_area')
+      .append("input")
+      .attr("type", "button")
+      .attr("name", "ingrfilter")
+      .attr("value", "Filter Ingr")
+      .style('margin-left', '30px')
+      .style("background-color", "#00e600")
+      
+      var resetButton = d3.select('#ingr_filter_area')
+      .append("input")
+      .attr("type", "button")
+      .attr("name", "reset")
+      .attr("value", "Reset")
+      .style('margin-left', '30px')
+      .style("background-color", "#ff3333")
+
+      //preparing settings 
+
+      var svg = d3.select('#ingr_graph')
+      .append("svg")
+      .attr('width', width)
+      .attr('height', height)
+      .style('margin-top', '20px')
+
+      var container = svg.append("g");
+
+      svg.call(
+          d3.zoom()
+              .scaleExtent([.1, 4])
+              .on("zoom", function() { container.attr("transform", d3.event.transform); })
+      );
+
+      var simulation = d3.forceSimulation()
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('charge', d3.forceManyBody().strength(-20))
+      //.force('collide', d3.forceCollide().radius(15))
+      .force("link", d3.forceLink().id(link => link.id).distance(50).strength(link => link.size/100))
+
+      var link = container.append("g").selectAll(".link");
+      var ntext = container.append("g").selectAll(".ntext");
+      var node = container.append("g").selectAll(".node");
+      
+      //preparing dataset
+
+      var dataset, graph, adjlist, usefulIngr;
+
+      var filteredNodes = {};
+      var filteredLinks = {};
+
+      d3.json("dataset/ingr_comp.json").then(function(ingr_data) {
+
+        dataset = $.extend(true, {}, ingr_data);
+
+        dataset.nodes.forEach(function(n) {
+          filteredNodes[n.id] = false;
+          groups.add(n.group);
+          ingrSet.add(n.id);
+        });
+        dataset.links.forEach(function(l) {
+          filteredLinks[l.id] = false;
+        });
+
+        graph = ingr_data;
+        groupsList = Array.from(groups).sort();
+        ingrList = Array.from(ingrSet).sort();
+
+
+        groupSelector.selectAll('option')
+        .data(groupsList)
+        .enter().append('option')
+        .attr('value', function (d) { return d; })
+        .text(function (d) { return d; });
+        d3.select("#groupselector").on("change",function(){ selectedGroup = this.options[this.selectedIndex].text;})
+
+        ingrSelector.selectAll('option')
+        .data(ingrList)
+        .enter().append('option')
+        .attr('value', function (d) { return d; })
+        .text(function (d) { return d; });
+        d3.select("#ingrselector").on("change",function(){ selectedIngr = this.options[this.selectedIndex].text;})
+
+        updateGraph();
+
+      });
+
+      //	general update pattern for updating the graph
+      function updateGraph() {
+        // ---------- nodes ----------
+        // UPDATE
+        node = node.data(graph.nodes, function(d) { return d.id;});
+        // EXIT
+        node.exit().remove();
+        // ENTER
+        var newNode = node.enter().append("circle")
+        .attr("class", "node")
+        .attr("r", 5)
+        .attr('fill', getNodeColor)
+        .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended)
+        )
+        newNode.on("mouseover", focus).on("mouseout", unfocus);
+        newNode.append("title")
+        .text(function(d) { return "id: " + d.id + "\n" + "group: " + d.group; });
+        //	ENTER + UPDATE
+	      node = node.merge(newNode);
+
+        // ---------- text ----------
+        // UPDATE
+        ntext = ntext.data(graph.nodes, function(d) { return d.id;});
+        // EXIT
+        ntext.exit().remove();
+        // ENTER
+        var newText = ntext.enter().append("text")
+        .text(node => node.id)
+        .attr("class", "ntext")
+        //.attr('text-decoration', getTextDec)
+        .attr('dx', 10)
+        .attr('dy', 4)
+        
+        //	ENTER + UPDATE
+	      ntext = ntext.merge(newText);
+
+        // ---------- links ----------
+        //	UPDATE
+        link = link.data(graph.links, function(d) { return d.id;});
+        //	EXIT
+        link.exit().remove();
+        //	ENTER
+        newLink = link.enter().append("line")
+        .attr("class", "link")
+        .attr("stroke-width", getLinkStroke)
+
+        newLink.append("title")
+        .text(function(d) { return "source: " + d.source + "\n" + "target: " + d.target + "\n" + "size: " + d.size; });
+        //	ENTER + UPDATE
+        link = link.merge(newLink);
+
+        //	update simulation nodes, links, and alpha
+        simulation
+          .nodes(graph.nodes)
+          .on("tick", ticked);
+
+        simulation.force("link")
+          .links(graph.links);
+
+        simulation.alpha(1).alphaTarget(0).restart();
+
+        adjlist = [];
+        graph.links.forEach(function(d) {
+            adjlist[d.source.index + "-" + d.target.index] = true;
+            adjlist[d.target.index + "-" + d.source.index] = true;
+        });
+
+      }
+
+      filterButton.on("click", function(){
+        document.getElementById("ingrselector").value = "All";
+        selectedIngr="All";
+        filterGraph(selectedGroup)});
+
+      ingrButton.on("click", function(){
+        document.getElementById("groupselector").value = "All";
+        selectedGroup="All";
+        filterGraphByIngr(selectedIngr)});
+
+      resetButton.on("click", function(){
+        document.getElementById("groupselector").value = "All";
+        selectedGroup="All";
+        document.getElementById("ingrselector").value = "All";
+        selectedIngr="All";
+        filterGraph('All');
+
+        });
+
+      function ticked() {
+        node
+          .attr("cx", function(d) { return d.x})
+          .attr("cy", function(d) { return d.y})
+        ntext
+          .attr("x", function(d) { return d.x})
+          .attr("y", function(d) { return d.y}) 
+        link
+          .attr('x1', function(d) { return d.source.x})
+          .attr('y1', function(d) { return d.source.y})
+          .attr('x2', function(d) { return d.target.x})
+          .attr('y2', function(d) { return d.target.y})
+      }
+
+      function filterGraph(groupSel) {
+
+        usefulIngr = [];
+        
+        // Reset Filtri
+        if (groupSel=="All") {
+          dataset.nodes.forEach(function(n) {
+            if(filteredNodes[n.id]) {
+              filteredNodes[n.id] = false;
+              graph.nodes.push($.extend(true, {}, n));
+            }
+          });
+          dataset.links.forEach(function(l) {
+            if(filteredLinks[l.id]) {
+              filteredLinks[l.id] = false;
+              graph.links.push($.extend(true, {}, l));
+            }
+          });
+        }
+
+        // Filtro per Group
+        else {
+          dataset.nodes.forEach(function(n) {
+              if(n.group==groupSel) {
+                usefulIngr.push(n.id);
+                if (filteredNodes[n.id]) {
+                  filteredNodes[n.id] = false;
+                  graph.nodes.push($.extend(true, {}, n));
+                }
+              } else if(n.group!=groupSel && !filteredNodes[n.id]) {
+                filteredNodes[n.id] = true;
+                graph.nodes.forEach(function(d,i) {
+                  if(n.id == d.id) {
+                    graph.nodes.splice(i,1);
+                  }
+                });
+              }
+          });
+          dataset.links.forEach(function(l) {
+            if (usefulIngr.includes(l.source) && usefulIngr.includes(l.target)) {
+              if(filteredLinks[l.id]) {
+                filteredLinks[l.id] = false;
+                graph.links.push($.extend(true, {}, l));
+              } 
+            } else if(!filteredLinks[l.id]) {
+              filteredLinks[l.id] = true;
+              graph.links.forEach(function(d,i) {
+                if(l.id == d.id) {
+                  graph.links.splice(i,1);
+                }
+              })
+            }
+          });
+        }
+
+        isSelected='';
+        updateGraph();
+      }
+
+      function filterGraphByIngr(ingrSel) {
+
+        if(ingrSel=="All") {
+          filterGraph('All');
+          return 
+        }
+
+        usefulIngr = [];
+
+        dataset.links.forEach(function(l) {
+          if(l.source==ingrSel) {
+            usefulIngr.push(l.target);
+            if(filteredLinks[l.id]) {
+              filteredLinks[l.id] = false;
+              graph.links.push($.extend(true, {}, l));
+            }
+          } else if(l.target==ingrSel) {
+            usefulIngr.push(l.source);
+            if(filteredLinks[l.id]) {
+              filteredLinks[l.id] = false;
+              graph.links.push($.extend(true, {}, l));
+            }
+          } else if(!filteredLinks[l.id]) {
+            filteredLinks[l.id] = true;
+            graph.links.forEach(function(d,i) {
+              if(l.id == d.id) {
+                graph.links.splice(i,1);
+              }
+            })
+          }
+        });
+
+        dataset.nodes.forEach(function(n) {
+          if(n.id==ingrSel) {
+            if (filteredNodes[n.id]) {
+                filteredNodes[n.id] = false;
+                graph.nodes.push($.extend(true, {}, n));
+              }
+          } else if(usefulIngr.includes(n.id)) {
+            if(filteredNodes[n.id]) {
+              filteredNodes[n.id] = false;
+              graph.nodes.push($.extend(true, {}, n));
+            }
+          } else if(!filteredNodes[n.id]) {
+            filteredNodes[n.id] = true;
+            graph.nodes.forEach(function(d,i) {
+              if(n.id == d.id) {
+                  graph.nodes.splice(i,1);
+                }
+            });
+          }
+        });
+
+        isSelected=ingrSel;
+        updateGraph();
+
+      }
+
+
+      // util functions 
+
+      function getNodeColor(node) {
+        return groupsColor[node.idgroup-1]
+      }
+
+      function getLinkStroke(link) {
+        return link.size
+      }
+
+      function getTextDec(node) {
+        return node.id == isSelected ? 'underline' : 'none'
+      }
+
+      function getNodeRadius(node) {
+        return node.id == isSelected ? 10 : 5
+      }
+
+      function neigh(a, b) {
+          return a == b || adjlist[a + "-" + b];
+      }
+
+      function focus(d) {
+          var index = d3.select(d3.event.target).datum().index;
+          node.style("opacity", function(o) {
+            return neigh(index, o.index) ? 1 : 0.1;
+          });
+          ntext.attr("display", function(o) {
+            return neigh(index, o.index) ? "block": "none";
+          });
+          link.style("opacity", function(o) {
+            return o.source.index == index || o.target.index == index ? 1 : 0.1;
+          });
+      }
+
+      function unfocus() {
+        ntext.attr("display", "block");
+        node.style("opacity", 1);
+        link.style("opacity", 1);
+      }
+
+      function dragstarted(d) {
+          d3.event.sourceEvent.stopPropagation();
+          if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+      }
+
+      function dragged(d) {
+          d.fx = d3.event.x;
+          d.fy = d3.event.y;
+      }
+
+      function dragended(d) {
+          if (!d3.event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+      }
+
+      //defining legend
+
+      const legendx = width-100
+      const legendy = 40
+
+      const legend = svg.append("g")
+      legend
+      .append('text')
+      .text(" -- LEGEND --")
+      .attr('font-size', 20)
+      .attr("x", legendx-50)
+      .attr("y", legendy-20)
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#fff505')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+10)
+      .append("title")
+      .text("Cereals and grain products");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#90ecab')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+10)
+      .append("title")
+      .text("Vegetables");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#baa34d')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+50)
+      .append("title")
+      .text("Legumes");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#f37f2d')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+50)
+      .append("title")
+      .text("Nuts and seeds");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#bae9ff')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+90)
+      .append("title")
+      .text("Fruits");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#ffdbdb')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+90)
+      .append("title")
+      .text("Sugars, syrups and sweets");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#ff1212')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+130)
+      .append("title")
+      .text("Meat and poultry");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#f7f3ce')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+130)
+      .append("title")
+      .text("Eggs");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#216583')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+170)
+      .append("title")
+      .text("Fish and shellfish");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#d0d0d0')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+170)
+      .append("title")
+      .text("Milk and milk products");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#000000')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+210)
+      .append("title")
+      .text("Oils and fats");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#5b0aa8')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+210)
+      .append("title")
+      .text("Beverages");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#065535')
+      .attr("cx", legendx-25)
+      .attr("cy", legendy+250)
+      .append("title")
+      .text("Herbs, spices, sauces");
+
+      legend
+      .append('circle')
+      .attr('r', 15)
+      .attr('fill', '#cd1076')
+      .attr("cx", legendx+40)
+      .attr("cy", legendy+250)
+      .append("title")
+      .text("Miscellaneous");
+
+      legend.style("outline", "2px dashed blue")
+      //.attr('width', 130).attr('height', 90)
+      //['#fff505','#90ecab','#baa34d','#f37f2d','#bae9ff','#ffdbdb','#ff1212',
+      //'#f7f3ce','#216583','#d0d0d0','#000000','#5b0aa8','#065535','#cd1076'];
+      
+    </script>
+</body>
+</html>
